@@ -1,5 +1,6 @@
 const server = Bun.serve({
-  port: process.env.PORT || 3000,
+  port: Number(process.env.PORT) || 8080,
+  hostname: "0.0.0.0", // Force Bun à écouter sur toutes les interfaces réseau pour Railway
   async fetch(request) {
     const url = new URL(request.url);
 
@@ -23,7 +24,7 @@ const server = Bun.serve({
         let secureHeaders = false;
 
         try {
-          // On tente de joindre le site en direct avec un timeout de 4 secondes
+          // Tente de joindre le site en direct avec un timeout de 4 secondes
           const response = await fetch(targetUrl, { 
             method: "GET", 
             headers: { "User-Agent": "ShieldConformiteScanner/1.0" },
@@ -33,7 +34,7 @@ const server = Bun.serve({
           isOnline = response.ok || response.status < 500;
           secureHeaders = response.headers.has("strict-transport-security") || response.headers.has("x-frame-options") || response.headers.has("content-security-policy");
         } catch (e) {
-          // Si le HTTPS échoue, on tente une dernière chance en HTTP classique
+          // Si le HTTPS échoue, tentative en HTTP classique
           try {
             const fallbackUrl = targetUrl.replace("https://", "http://");
             const response = await fetch(fallbackUrl, { method: "HEAD", signal: AbortSignal.timeout(3000) });
@@ -74,10 +75,11 @@ const server = Bun.serve({
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Shield Conformité — L'IA de Cybersécurité Souveraine</title>
+          <!-- Tailwind CSS v4 via CDN -->
           <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+          <!-- Bibliothèque AOS pour les animations au défilement -->
           <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
           <style>
-              /* Styles et animations personnalisés */
               .btn-click-effect {
                   transition: transform 0.1s ease, box-shadow 0.2s ease;
               }
@@ -94,8 +96,10 @@ const server = Bun.serve({
       </head>
       <body class="bg-slate-950 text-slate-100 font-sans min-h-screen overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200">
 
+          <!-- Grille de fond futuriste -->
           <div class="fixed inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none z-0"></div>
 
+          <!-- Barre de Navigation Flottante -->
           <nav class="sticky top-0 z-50 backdrop-blur-md bg-slate-950/70 border-b border-slate-900 px-6 py-4 transition-all duration-300">
               <div class="max-w-6xl mx-auto flex justify-between items-center">
                   <div class="flex items-center space-x-2">
@@ -113,6 +117,7 @@ const server = Bun.serve({
               </div>
           </nav>
 
+          <!-- SECTION HERO : Le Scanner de Conformité Intelligent -->
           <section id="hero" class="relative max-w-4xl mx-auto pt-20 pb-16 px-6 text-center z-10 space-y-8">
               <div data-aos="fade-down" class="inline-flex items-center space-x-2 bg-indigo-500/10 text-indigo-400 text-xs px-3 py-1.5 rounded-full font-medium border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.1)]">
                   <span>✨ Propulsé par l'IA Souveraine NIS2</span>
@@ -126,9 +131,11 @@ const server = Bun.serve({
                   Analysez instantanément la conformité technique de vos domaines et infrastructures web face aux nouvelles directives européennes.
               </p>
 
+              <!-- COMPOSANT INTERACTIF : Dashboard & Scanner -->
               <div data-aos="zoom-in" data-aos-delay="300" class="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl backdrop-blur-xl max-w-3xl mx-auto space-y-6 relative overflow-hidden">
                   <div class="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-transparent via-indigo-500 to-transparent"></div>
                   
+                  <!-- Jauge globale -->
                   <div class="flex justify-between items-center">
                       <div class="text-left">
                           <h3 class="font-bold text-lg">Score Global de Conformité</h3>
@@ -140,6 +147,7 @@ const server = Bun.serve({
                       <div id="score-bar" class="bg-indigo-500 h-3 rounded-full transition-all duration-700" style="width: 50%"></div>
                   </div>
 
+                  <!-- Input & Bouton de Scan -->
                   <div class="flex flex-col sm:flex-row gap-3 pt-2">
                       <input type="text" id="url-input" placeholder="Entrez un domaine (ex: google.fr)" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 flex-1 text-white placeholder-slate-500 transition-colors">
                       <button id="scan-button" onclick="executeAdvancedScan()" class="btn-click-effect glow-hover bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 py-3 rounded-xl text-sm transition-all cursor-pointer whitespace-nowrap shadow-lg shadow-indigo-600/20">
@@ -148,6 +156,7 @@ const server = Bun.serve({
                   </div>
                   <p id="error-msg" class="text-xs text-rose-400 text-left hidden"></p>
 
+                  <!-- Grille des indicateurs -->
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/60 text-left">
                       <div class="p-3 bg-slate-950/40 border border-slate-800/40 rounded-xl flex items-center space-x-3">
                           <div id="status-dot" class="w-2.5 h-2.5 rounded-full bg-slate-600"></div>
@@ -174,6 +183,7 @@ const server = Bun.serve({
               </div>
           </section>
 
+          <!-- SECTION FONCTIONNALITÉS : Grille de Cartes Premium Animées -->
           <section id="features" class="max-w-5xl mx-auto py-24 px-6 space-y-12 relative z-10">
               <div class="text-center space-y-4">
                   <h3 class="text-xs font-bold text-indigo-400 tracking-widest uppercase">Technologie Avancée</h3>
@@ -181,21 +191,25 @@ const server = Bun.serve({
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <!-- Carte 1 -->
                   <div data-aos="fade-up" class="bg-slate-900/40 border border-slate-800 hover:border-slate-700 p-6 rounded-2xl space-y-3 transition-all backdrop-blur-sm group hover:-translate-y-1">
                       <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all">🔒</div>
                       <h4 class="text-lg font-bold">Audit Cryptographique Express</h4>
                       <p class="text-sm text-slate-400 font-light leading-relaxed">Analyse des protocoles TLS et vérification en temps réel de la validité et de la robustesse des certificats SSL/HTTPS connectés.</p>
                   </div>
+                  <!-- Carte 2 -->
                   <div data-aos="fade-up" data-aos-delay="100" class="bg-slate-900/40 border border-slate-800 hover:border-slate-700 p-6 rounded-2xl space-y-3 transition-all backdrop-blur-sm group hover:-translate-y-1">
                       <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all">📡</div>
                       <h4 class="text-lg font-bold">Analyse d'En-têtes Réseau</h4>
                       <p class="text-sm text-slate-400 font-light leading-relaxed">Détection automatique des politiques de sécurité impératives comme HSTS, CSP, et X-Frame-Options pour contrer les injections.</p>
                   </div>
+                  <!-- Carte 3 -->
                   <div data-aos="fade-up" data-aos-delay="200" class="bg-slate-900/40 border border-slate-800 hover:border-slate-700 p-6 rounded-2xl space-y-3 transition-all backdrop-blur-sm group hover:-translate-y-1">
                       <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all">🎯</div>
                       <h4 class="text-lg font-bold">Calcul de Score NIS2</h4>
                       <p class="text-sm text-slate-400 font-light leading-relaxed">Algorithme d'évaluation basé sur les exigences réglementaires européennes actuelles pour identifier instantanément les défaillances critiques.</p>
                   </div>
+                  <!-- Carte 4 -->
                   <div data-aos="fade-up" data-aos-delay="300" class="bg-slate-900/40 border border-slate-800 hover:border-slate-700 p-6 rounded-2xl space-y-3 transition-all backdrop-blur-sm group hover:-translate-y-1">
                       <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg font-bold border border-indigo-500/20 group-hover:bg-indigo-500 group-hover:text-white transition-all">💾</div>
                       <h4 class="text-lg font-bold">Prêt pour la Persistance</h4>
@@ -204,6 +218,7 @@ const server = Bun.serve({
               </div>
           </section>
 
+          <!-- SECTION TARIFS : Grille Interactive avec Effet d'Échelle -->
           <section id="pricing" class="max-w-5xl mx-auto py-24 px-6 space-y-12 relative z-10">
               <div class="text-center space-y-4">
                   <h3 class="text-xs font-bold text-indigo-400 tracking-widest uppercase">Tarification transparente</h3>
@@ -211,6 +226,7 @@ const server = Bun.serve({
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+                  <!-- Offre 1 -->
                   <div data-aos="fade-right" class="bg-slate-900/30 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6 backdrop-blur-sm hover:border-slate-700 transition-all">
                       <div class="space-y-4">
                           <h4 class="font-bold text-md text-slate-300">Starter</h4>
@@ -225,6 +241,7 @@ const server = Bun.serve({
                       <a href="#hero" class="btn-click-effect text-center bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2.5 rounded-xl transition-all">Lancer un scan gratuit</a>
                   </div>
 
+                  <!-- Offre 2 (Mise en avant + Effet Glow) -->
                   <div data-aos="bg-zoom" class="bg-gradient-to-b from-indigo-950/40 to-slate-900/60 border-2 border-indigo-500 rounded-2xl p-6 flex flex-col justify-between space-y-6 backdrop-blur-sm shadow-xl shadow-indigo-500/5 relative group scale-100 md:scale-105 z-20">
                       <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-md">Recommandé</div>
                       <div class="space-y-4">
@@ -243,6 +260,7 @@ const server = Bun.serve({
                       </button>
                   </div>
 
+                  <!-- Offre 3 -->
                   <div data-aos="fade-left" class="bg-slate-900/30 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6 backdrop-blur-sm hover:border-slate-700 transition-all">
                       <div class="space-y-4">
                           <h4 class="font-bold text-md text-slate-300">Entreprise</h4>
@@ -260,26 +278,25 @@ const server = Bun.serve({
               </div>
           </section>
 
+          <!-- Pied de page -->
           <footer class="border-t border-slate-900 text-center py-8 text-xs text-slate-500 relative z-10">
               <p>© 2026 Shield Conformité. Tous droits réservés. Hébergement Cloud Souverain.</p>
           </footer>
 
+          <!-- Scripts indispensables : AOS + Logique de Scan -->
           <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
           <script>
-              // Initialisation des animations au défilement
               AOS.init({
                   duration: 800,
                   once: true,
                   easing: 'ease-out'
               });
 
-              // Logique asynchrone pour le vrai scanner
               async function executeAdvancedScan() {
                   const input = document.getElementById('url-input');
                   const btn = document.getElementById('scan-button');
                   const errorMsg = document.getElementById('error-msg');
 
-                  // Éléments de l'interface à animer/modifier
                   const scoreText = document.getElementById('score-text');
                   const scoreBar = document.getElementById('score-bar');
 
@@ -300,12 +317,10 @@ const server = Bun.serve({
                       return;
                   }
 
-                  // Verrouillage de l'interface et passage en mode chargement animé
                   btn.disabled = true;
                   btn.innerText = "Analyse en cours...";
                   input.disabled = true;
 
-                  // Réinitialisation visuelle temporaire (effet d'attente)
                   scoreText.innerText = "--%";
                   scoreText.className = "text-4xl font-black text-amber-400 animate-pulse";
                   scoreBar.className = "bg-amber-500 h-3 rounded-full transition-all duration-300 animate-pulse";
@@ -323,11 +338,9 @@ const server = Bun.serve({
                           throw new Error(data.error);
                       }
 
-                      // Arrêt du mode chargement
                       scoreText.classList.remove('animate-pulse');
                       scoreBar.classList.remove('animate-pulse');
 
-                      // Mise à jour de l'interface en fonction du score final calculé
                       scoreText.innerText = data.score + "%";
                       scoreBar.style.width = data.score + "%";
 
@@ -342,7 +355,6 @@ const server = Bun.serve({
                           scoreBar.className = "bg-rose-500 h-3 rounded-full transition-all duration-500";
                       }
 
-                      // État 1 : Serveur en ligne
                       if (data.isOnline) {
                           statusDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]";
                           statusLabel.innerText = "EN LIGNE";
@@ -353,7 +365,6 @@ const server = Bun.serve({
                           statusLabel.className = "text-xs font-bold text-rose-500 font-mono";
                       }
 
-                      // État 2 : SSL
                       if (data.isHttps) {
                           sslDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]";
                           sslLabel.innerText = "HTTPS ACTIF";
@@ -364,7 +375,6 @@ const server = Bun.serve({
                           sslLabel.className = "text-xs font-bold text-rose-500 font-mono";
                       }
 
-                      // État 3 : En-têtes de sécurité
                       if (data.secureHeaders) {
                           headersDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]";
                           headersLabel.innerText = "CONFORME";
@@ -400,4 +410,4 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 Serveur Premium en ligne sur http://localhost:${server.port}`);
+console.log(`🚀 Serveur Premium lié au port distant`);
