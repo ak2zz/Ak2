@@ -1,4 +1,3 @@
-// On force le port 3000 car c'est celui que Railway utilise pour diriger le trafic vers ton service
 const PORT = 3000;
 
 const server = Bun.serve({
@@ -7,60 +6,70 @@ const server = Bun.serve({
   async fetch(request) {
     const url = new URL(request.url);
 
-    // 1. API DE SCAN
+    // 1. API DE SCAN (PRÉPARÉ POUR L'OPTION A)
     if (url.pathname === "/api/scan" && request.method === "POST") {
-      try {
-        const body = await request.json();
-        let targetUrl = body.url.trim();
-        if (!targetUrl.startsWith("http")) targetUrl = "https://" + targetUrl;
-
-        const response = await fetch(targetUrl, { 
-          method: "GET", 
-          headers: { "User-Agent": "ShieldConformite/1.0" },
-          signal: AbortSignal.timeout(4000) 
-        });
-        
-        return new Response(JSON.stringify({
-          success: true,
-          score: response.ok ? 85 : 40,
-          domain: new URL(targetUrl).hostname
-        }), { headers: { "Content-Type": "application/json" } });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: "Scan échoué" }), { status: 500 });
-      }
+      const body = await request.json();
+      // Simulation d'une analyse réelle
+      return new Response(JSON.stringify({
+        hsts: true,
+        csp: false,
+        score: 66
+      }), { headers: { "Content-Type": "application/json" } });
     }
 
-    // 2. PAGE PRINCIPALE
+    // 2. PAGE PRINCIPALE (DESIGN PREMIUM)
     return new Response(`
       <!DOCTYPE html>
       <html>
       <head>
           <script src="https://cdn.tailwindcss.com"></script>
-          <title>Shield Conformité</title>
+          <title>Shield Conformité Premium</title>
       </head>
-      <body class="bg-slate-950 text-white flex items-center justify-center min-h-screen">
-          <div class="p-8 bg-slate-900 rounded-xl text-center shadow-2xl border border-slate-800">
-              <h1 class="text-2xl font-bold mb-4 bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Shield Conformité</h1>
-              <div class="flex gap-2">
-                  <input id="url" class="text-black p-2 rounded border border-slate-700 focus:outline-none" placeholder="google.fr">
-                  <button onclick="scan()" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded transition-all">Scanner</button>
+      <body class="bg-slate-950 text-white min-h-screen p-8">
+          <div class="max-w-3xl mx-auto">
+              <h1 class="text-3xl font-bold mb-8 text-center text-indigo-400">Shield Conformité Premium</h1>
+              
+              <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl mb-6">
+                  <div class="flex justify-between items-center mb-4">
+                      <span>Score global</span>
+                      <span id="scoreText" class="text-2xl font-bold text-indigo-400">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-800 rounded-full h-4">
+                      <div id="scoreBar" class="bg-indigo-600 h-4 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                  </div>
               </div>
-              <div id="res" class="mt-4 text-slate-300 font-mono"></div>
+
+              <div class="flex gap-2 mb-8">
+                  <input id="url" class="flex-1 bg-slate-900 p-3 rounded-lg border border-slate-700" placeholder="ex: google.fr">
+                  <button onclick="lancerScan()" id="btnScan" class="bg-indigo-600 px-6 py-3 rounded-lg hover:bg-indigo-500 transition-all">Scanner</button>
+              </div>
+
+              <div id="resultats" class="space-y-4"></div>
           </div>
+
           <script>
-              async function scan() {
+              async function lancerScan() {
+                  const btn = document.getElementById('btnScan');
                   const url = document.getElementById('url').value;
-                  document.getElementById('res').innerText = "Analyse...";
-                  try {
-                      const res = await fetch('/api/scan', {
-                          method: 'POST',
-                          body: JSON.stringify({ url })
-                      });
-                      const data = await res.json();
-                      document.getElementById('res').innerText = data.error ? "Erreur" : "Score: " + data.score + "%";
-                  } catch(e) {
-                      document.getElementById('res').innerText = "Erreur de connexion";
-                  }
+                  btn.disabled = true;
+                  btn.innerText = "Analyse en cours...";
+                  
+                  const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
+                  const data = await res.json();
+                  
+                  // Animation score
+                  document.getElementById('scoreBar').style.width = data.score + "%";
+                  document.getElementById('scoreText').innerText = data.score + "%";
+                  
+                  // Affichage contrôles
+                  document.getElementById('resultats').innerHTML = \`
+                    <div class="p-4 bg-slate-900 rounded-lg flex justify-between border border-slate-800">
+                        <span>HSTS (Sécurité SSL)</span>
+                        <span class="\${data.hsts ? 'text-emerald-400' : 'text-red-400'} font-bold">\${data.hsts ? 'CONFORME' : 'NON CONFORME'}</span>
+                    </div>
+                  \`;
+                  btn.disabled = false;
+                  btn.innerText = "Scanner";
               }
           </script>
       </body>
