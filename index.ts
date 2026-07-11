@@ -19,9 +19,9 @@ Bun.serve({
         const h = res.headers;
 
         const checks = [
-          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS." },
-          { name: "CSP", pass: h.has('content-security-policy'), tip: "Définissez une CSP." },
-          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Utilisez X-Frame-Options." }
+          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS pour sécuriser la connexion." },
+          { name: "CSP", pass: h.has('content-security-policy'), tip: "Ajoutez une politique CSP contre les XSS." },
+          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Protégez-vous du clickjacking." }
         ];
 
         const score = Math.round((checks.filter(c => c.pass).length / checks.length) * 100);
@@ -44,36 +44,55 @@ Bun.serve({
       <head>
           <meta charset="UTF-8">
           <script src="https://cdn.tailwindcss.com"></script>
+          <style>
+            .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); }
+          </style>
       </head>
-      <body class="p-8"><div class="max-w-3xl mx-auto">
-        <h1 class="text-3xl font-bold mb-8 text-indigo-400">Shield Audit</h1>
-        <div class="flex gap-2 mb-8">
-            <input id="url" class="flex-1 bg-slate-900 p-3 rounded" placeholder="domaine.com">
-            <button onclick="scan()" class="bg-indigo-600 px-6 py-3 rounded">Scanner</button>
+      <body class="p-8 font-sans">
+        <div class="max-w-2xl mx-auto">
+          <h1 class="text-4xl font-extrabold mb-10 text-center bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Shield Audit</h1>
+          
+          <div class="flex gap-2 mb-10">
+            <input id="url" class="flex-1 bg-slate-900 p-4 rounded-xl border border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: google.com">
+            <button onclick="scan()" id="btn" class="bg-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-500 transition-all">Scanner</button>
+          </div>
+
+          <div id="dashboard" class="space-y-4"></div>
+          <h2 class="mt-12 text-lg font-bold text-slate-400">Historique</h2>
+          <div id="history" class="mt-4 space-y-2"></div>
         </div>
-        <div id="dashboard" class="space-y-4"></div>
-        <h2 class="mt-12 text-xl font-bold">Derniers scans</h2>
-        <div id="history" class="mt-4 space-y-2"></div>
-      </div>
-      <script>
-        async function scan() {
-            const url = document.getElementById('url').value;
-            const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
+
+        <script>
+          async function scan() {
+            const b = document.getElementById('btn');
+            b.innerText = "Analyse...";
+            const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url: document.getElementById('url').value }) });
             const data = await res.json();
+            b.innerText = "Scanner";
+            
             const dash = document.getElementById('dashboard');
-            dash.innerHTML = '<div class="p-4 bg-slate-900 rounded font-bold">Score: '+data.score+'%</div>';
+            dash.innerHTML = \`<div class="glass p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
+                <span class="text-xl font-bold">Score global</span>
+                <span class="text-3xl font-black text-blue-400">\${data.score}%</span>
+            </div>\`;
             data.checks.forEach(c => {
-                dash.innerHTML += '<div class="p-4 bg-slate-800 rounded"><b>'+c.name+'</b>: '+(c.pass ? 'OUI' : 'NON - '+c.tip)+'</div>';
+                dash.innerHTML += \`<div class="glass p-4 rounded-xl border border-slate-800 flex justify-between">
+                    <span>\${c.name}</span>
+                    <span class="\${c.pass ? 'text-green-400' : 'text-red-400'} font-bold">\${c.pass ? 'OUI' : 'NON'}</span>
+                </div>\`;
             });
             loadHistory();
-        }
-        async function loadHistory() {
+          }
+          async function loadHistory() {
             const res = await fetch('/api/history');
             const data = await res.json();
-            document.getElementById('history').innerHTML = data.map(h => '<div class="p-2 bg-slate-900 text-xs">'+h.domain+' - Score: '+h.score+'%</div>').join('');
-        }
-        loadHistory();
-      </script></body></html>
+            document.getElementById('history').innerHTML = data.map(h => \`<div class="glass p-3 rounded-lg text-sm flex justify-between">
+                <span>\${h.domain}</span><span class="font-bold">\${h.score}%</span>
+            </div>\`).join('');
+          }
+          loadHistory();
+        </script>
+      </body></html>
     `, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 });
