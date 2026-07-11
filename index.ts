@@ -13,26 +13,23 @@ Bun.serve({
 
     if (url.pathname === "/api/scan" && req.method === "POST") {
       const { url: target } = await req.json();
-      const domain = new URL(target.startsWith("http") ? target : `https://${target}`).hostname;
-      
       try {
+        const domain = new URL(target.startsWith("http") ? target : `https://${target}`).hostname;
         const res = await fetch(`https://${domain}`, { method: 'HEAD' });
         const h = res.headers;
 
         const checks = [
-          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS pour forcer les connexions HTTPS." },
-          { name: "CSP", pass: h.has('content-security-policy'), tip: "Définissez une CSP pour prévenir les injections XSS." },
-          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Utilisez X-Frame-Options pour éviter le clickjacking." }
+          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS." },
+          { name: "CSP", pass: h.has('content-security-policy'), tip: "Définissez une CSP." },
+          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Utilisez X-Frame-Options." }
         ];
 
         const score = Math.round((checks.filter(c => c.pass).length / checks.length) * 100);
-        const details = JSON.stringify(checks);
-
-        db.run("INSERT INTO scans (domain, score, details) VALUES (?, ?, ?)", [domain, score, details]);
+        db.run("INSERT INTO scans (domain, score, details) VALUES (?, ?, ?)", [domain, score, JSON.stringify(checks)]);
 
         return new Response(JSON.stringify({ score, checks }), { headers: { "Content-Type": "application/json" } });
       } catch (e) {
-        return new Response(JSON.stringify({ error: "Domaine inaccessible" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "Inaccessible" }), { status: 400 });
       }
     }
 
@@ -44,7 +41,10 @@ Bun.serve({
     return new Response(`
       <!DOCTYPE html>
       <html class="bg-slate-950 text-white">
-      <head><script src="https://cdn.tailwindcss.com"></script></head>
+      <head>
+          <meta charset="UTF-8">
+          <script src="https://cdn.tailwindcss.com"></script>
+      </head>
       <body class="p-8"><div class="max-w-3xl mx-auto">
         <h1 class="text-3xl font-bold mb-8 text-indigo-400">Shield Audit</h1>
         <div class="flex gap-2 mb-8">
@@ -61,9 +61,9 @@ Bun.serve({
             const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
             const data = await res.json();
             const dash = document.getElementById('dashboard');
-            dash.innerHTML = '<div class="p-4 bg-slate-900 rounded">Score: '+data.score+'%</div>';
+            dash.innerHTML = '<div class="p-4 bg-slate-900 rounded font-bold">Score: '+data.score+'%</div>';
             data.checks.forEach(c => {
-                dash.innerHTML += '<div class="p-4 bg-slate-800 rounded"><b>'+c.name+'</b>: '+(c.pass ? '✅' : '❌ <span class="text-xs text-red-400">'+c.tip+'</span>')+'</div>';
+                dash.innerHTML += '<div class="p-4 bg-slate-800 rounded"><b>'+c.name+'</b>: '+(c.pass ? 'OUI' : 'NON - '+c.tip)+'</div>';
             });
             loadHistory();
         }
@@ -74,6 +74,6 @@ Bun.serve({
         }
         loadHistory();
       </script></body></html>
-    `, { headers: { "Content-Type": "text/html" } });
+    `, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
 });
