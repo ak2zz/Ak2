@@ -1,3 +1,9 @@
+import { Database } from "bun:sqlite";
+
+// Initialisation de la base SQLite
+const db = new Database("shield.db");
+db.run("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT, score INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+
 const PORT = 3000;
 
 const server = Bun.serve({
@@ -6,26 +12,24 @@ const server = Bun.serve({
   async fetch(request) {
     const url = new URL(request.url);
 
-    // 1. API DE SCAN INTELLIGENT
+    // 1. API DE SCAN + ENREGISTREMENT DB
     if (url.pathname === "/api/scan" && request.method === "POST") {
       try {
         const { url: targetUrl } = await request.json();
         const formattedUrl = targetUrl.startsWith("http") ? targetUrl : `https://${targetUrl}`;
+        const domain = new URL(formattedUrl).hostname;
         
-        // On récupère les headers du site cible
         const response = await fetch(formattedUrl, { method: 'HEAD', redirect: 'follow' });
         const headers = response.headers;
 
-        // Analyse des en-têtes de sécurité
         const hsts = headers.has('strict-transport-security');
         const csp = headers.has('content-security-policy');
         const xFrame = headers.has('x-frame-options');
 
-        // Calcul du score
-        let score = 0;
-        if (hsts) score += 33;
-        if (csp) score += 34;
-        if (xFrame) score += 33;
+        let score = (hsts ? 33 : 0) + (csp ? 34 : 0) + (xFrame ? 33 : 0);
+
+        // Sauvegarde dans SQLite
+        db.run("INSERT INTO scans (domain, score) VALUES (?, ?)", [domain, score]);
 
         return new Response(JSON.stringify({ hsts, csp, xFrame, score }), { 
           headers: { "Content-Type": "application/json" } 
@@ -70,11 +74,9 @@ const server = Bun.serve({
                   const url = document.getElementById('url').value;
                   const btn = document.getElementById('btnScan');
                   btn.disabled = true;
+                  btn.innerText = "Analyse...";
                   
-                  const res = await fetch('/api/scan', { 
-                    method: 'POST', 
-                    body: JSON.stringify({ url }) 
-                  });
+                  const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
                   const data = await res.json();
                   
                   document.getElementById('scoreBar').style.width = data.score + "%";
@@ -83,14 +85,11 @@ const server = Bun.serve({
                   document.getElementById('resultats').innerHTML = \`
                     <div class="p-4 bg-slate-900 rounded-lg flex justify-between border border-slate-800">
                         <span>HSTS (SSL)</span>
-                        <span class="\${data.hsts ? 'text-emerald-400' : 'text-red-400'} font-bold">\${data.hsts ? 'CONFORME' : 'NON'}</span>
-                    </div>
-                    <div class="p-4 bg-slate-900 rounded-lg flex justify-between border border-slate-800">
-                        <span>CSP (Content Security)</span>
-                        <span class="\${data.csp ? 'text-emerald-400' : 'text-red-400'} font-bold">\${data.csp ? 'CONFORME' : 'NON'}</span>
+                        <span class="\${data.hsts ? 'text-emerald-400' : 'text-red-400'} font-bold">\${data.hsts ? 'OUI' : 'NON'}</span>
                     </div>
                   \`;
                   btn.disabled = false;
+                  btn.innerText = "Scanner";
               }
           </script>
       </body>
