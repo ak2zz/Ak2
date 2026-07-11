@@ -6,8 +6,8 @@ const server = Bun.serve({
     // 🌐 1. API DU SCANNER INTELLIGENT
     if (url.pathname === "/api/scan" && request.method === "POST") {
       try {
-        const body = await request.json();
-        let targetUrl = body.url.trim();
+        const body = await request.json() as { url: string };
+        let targetUrl = body.url?.trim();
 
         if (!targetUrl) {
           return new Response(JSON.stringify({ error: "Veuillez entrer une adresse valide." }), { status: 400 });
