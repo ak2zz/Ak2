@@ -5,21 +5,21 @@ serve({
   async fetch(req) {
     const url = new URL(req.url);
 
-    // 1. Si on demande la page d'accueil, on renvoie le fichier HTML physique
+    // 1. Sert le fichier physique index.html sans essayer de le compiler
     if (url.pathname === "/") {
-      return new Response(Bun.file("./index.html"), {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
-      });
+      return new Response(Bun.file("./index.html"));
     }
 
-    // 2. Si c'est l'API de scan, on traite la logique
+    // 2. Ton API reste ici
     if (url.pathname === "/api/scan" && req.method === "POST") {
       try {
-        const body = await req.json(); //
-        // ... ta logique de scan ...
-        return new Response(JSON.stringify({ status: "success" }));
+        const body = await req.json();
+        // ... (Ton code de logique de scan) ...
+        return new Response(JSON.stringify({ status: "success" }), {
+          headers: { "Content-Type": "application/json" }
+        });
       } catch (e) {
-        return new Response(JSON.stringify({ error: "Erreur" }), { status: 400 });
+        return new Response(JSON.stringify({ error: "Erreur serveur" }), { status: 400 });
       }
     }
 
