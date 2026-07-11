@@ -19,9 +19,9 @@ Bun.serve({
         const h = res.headers;
 
         const checks = [
-          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS pour sécuriser la connexion." },
-          { name: "CSP", pass: h.has('content-security-policy'), tip: "Ajoutez une politique CSP contre les XSS." },
-          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Protégez-vous du clickjacking." }
+          { name: "HSTS", pass: h.has('strict-transport-security') },
+          { name: "CSP", pass: h.has('content-security-policy') },
+          { name: "X-Frame", pass: h.has('x-frame-options') }
         ];
 
         const score = Math.round((checks.filter(c => c.pass).length / checks.length) * 100);
@@ -40,29 +40,39 @@ Bun.serve({
 
     return new Response(`
       <!DOCTYPE html>
-      <html class="bg-slate-950 text-white">
+      <html class="bg-black text-white">
       <head>
           <meta charset="UTF-8">
           <script src="https://cdn.tailwindcss.com"></script>
           <style>
-            .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); }
+            .hidden-panel { display: none; }
           </style>
       </head>
-      <body class="p-8 font-sans">
-        <div class="max-w-2xl mx-auto">
-          <h1 class="text-4xl font-extrabold mb-10 text-center bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">Shield Audit</h1>
-          
-          <div class="flex gap-2 mb-10">
-            <input id="url" class="flex-1 bg-slate-900 p-4 rounded-xl border border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ex: google.com">
-            <button onclick="scan()" id="btn" class="bg-blue-600 px-8 py-4 rounded-xl font-bold hover:bg-blue-500 transition-all">Scanner</button>
-          </div>
+      <body class="font-sans antialiased">
+        
+        <div id="landing" class="h-screen flex flex-col justify-center items-center p-8">
+            <h1 class="text-6xl font-bold tracking-tighter mb-6">SHIELD AUDIT</h1>
+            <p class="text-gray-400 mb-12 text-lg">Sécurité web. Transparence totale. Analyse immédiate.</p>
+            <button onclick="demarrer()" class="px-8 py-3 bg-white text-black font-bold hover:bg-gray-200 transition-colors">Démarrer l'audit</button>
+        </div>
 
-          <div id="dashboard" class="space-y-4"></div>
-          <h2 class="mt-12 text-lg font-bold text-slate-400">Historique</h2>
-          <div id="history" class="mt-4 space-y-2"></div>
+        <div id="dashboard" class="hidden-panel max-w-2xl mx-auto p-12">
+            <h2 class="text-2xl font-bold mb-8">Nouveau Scan</h2>
+            <div class="flex gap-4 mb-8">
+                <input id="url" class="flex-1 bg-transparent border-b border-gray-700 p-2 focus:outline-none" placeholder="Entrez un domaine...">
+                <button onclick="scan()" id="btn" class="border border-white px-6 py-2 hover:bg-white hover:text-black transition-all">Scanner</button>
+            </div>
+            <div id="results" class="space-y-6"></div>
+            <div id="history" class="mt-16 space-y-4"></div>
         </div>
 
         <script>
+          function demarrer() {
+            document.getElementById('landing').classList.add('hidden-panel');
+            document.getElementById('dashboard').classList.remove('hidden-panel');
+            loadHistory();
+          }
+
           async function scan() {
             const b = document.getElementById('btn');
             b.innerText = "Analyse...";
@@ -70,27 +80,23 @@ Bun.serve({
             const data = await res.json();
             b.innerText = "Scanner";
             
-            const dash = document.getElementById('dashboard');
-            dash.innerHTML = \`<div class="glass p-6 rounded-2xl border border-slate-700 flex justify-between items-center">
-                <span class="text-xl font-bold">Score global</span>
-                <span class="text-3xl font-black text-blue-400">\${data.score}%</span>
-            </div>\`;
+            const resDiv = document.getElementById('results');
+            resDiv.innerHTML = \`<div class="text-4xl font-black mb-6">\${data.score}%</div>\`;
             data.checks.forEach(c => {
-                dash.innerHTML += \`<div class="glass p-4 rounded-xl border border-slate-800 flex justify-between">
-                    <span>\${c.name}</span>
-                    <span class="\${c.pass ? 'text-green-400' : 'text-red-400'} font-bold">\${c.pass ? 'OUI' : 'NON'}</span>
+                resDiv.innerHTML += \`<div class="flex justify-between border-b border-gray-800 pb-2">
+                    <span class="text-gray-400">\${c.name}</span>
+                    <span class="\${c.pass ? 'text-white' : 'text-gray-600'}">\${c.pass ? 'ACTIF' : 'INACTIF'}</span>
                 </div>\`;
             });
             loadHistory();
           }
+
           async function loadHistory() {
             const res = await fetch('/api/history');
             const data = await res.json();
-            document.getElementById('history').innerHTML = data.map(h => \`<div class="glass p-3 rounded-lg text-sm flex justify-between">
-                <span>\${h.domain}</span><span class="font-bold">\${h.score}%</span>
-            </div>\`).join('');
+            document.getElementById('history').innerHTML = '<h3 class="text-gray-500 text-sm uppercase">Historique récent</h3>' + 
+                data.map(h => \`<div class="flex justify-between py-2 border-b border-gray-900 text-sm"><span>\${h.domain}</span><span>\${h.score}%</span></div>\`).join('');
           }
-          loadHistory();
         </script>
       </body></html>
     `, { headers: { "Content-Type": "text/html; charset=utf-8" } });
