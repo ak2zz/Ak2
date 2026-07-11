@@ -1,99 +1,79 @@
 import { Database } from "bun:sqlite";
 
-// Initialisation de la base SQLite
 const db = new Database("shield.db");
-db.run("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT, score INTEGER, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
+db.run("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT, score INTEGER, details TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
 
 const PORT = 3000;
 
-const server = Bun.serve({
+Bun.serve({
   port: PORT,
   hostname: "0.0.0.0",
-  async fetch(request) {
-    const url = new URL(request.url);
+  async fetch(req) {
+    const url = new URL(req.url);
 
-    // 1. API DE SCAN + ENREGISTREMENT DB
-    if (url.pathname === "/api/scan" && request.method === "POST") {
+    if (url.pathname === "/api/scan" && req.method === "POST") {
+      const { url: target } = await req.json();
+      const domain = new URL(target.startsWith("http") ? target : `https://${target}`).hostname;
+      
       try {
-        const { url: targetUrl } = await request.json();
-        const formattedUrl = targetUrl.startsWith("http") ? targetUrl : `https://${targetUrl}`;
-        const domain = new URL(formattedUrl).hostname;
-        
-        const response = await fetch(formattedUrl, { method: 'HEAD', redirect: 'follow' });
-        const headers = response.headers;
+        const res = await fetch(`https://${domain}`, { method: 'HEAD' });
+        const h = res.headers;
 
-        const hsts = headers.has('strict-transport-security');
-        const csp = headers.has('content-security-policy');
-        const xFrame = headers.has('x-frame-options');
+        const checks = [
+          { name: "HSTS", pass: h.has('strict-transport-security'), tip: "Activez HSTS pour forcer les connexions HTTPS." },
+          { name: "CSP", pass: h.has('content-security-policy'), tip: "Définissez une CSP pour prévenir les injections XSS." },
+          { name: "X-Frame", pass: h.has('x-frame-options'), tip: "Utilisez X-Frame-Options pour éviter le clickjacking." }
+        ];
 
-        let score = (hsts ? 33 : 0) + (csp ? 34 : 0) + (xFrame ? 33 : 0);
+        const score = Math.round((checks.filter(c => c.pass).length / checks.length) * 100);
+        const details = JSON.stringify(checks);
 
-        // Sauvegarde dans SQLite
-        db.run("INSERT INTO scans (domain, score) VALUES (?, ?)", [domain, score]);
+        db.run("INSERT INTO scans (domain, score, details) VALUES (?, ?, ?)", [domain, score, details]);
 
-        return new Response(JSON.stringify({ hsts, csp, xFrame, score }), { 
-          headers: { "Content-Type": "application/json" } 
-        });
-      } catch (err) {
-        return new Response(JSON.stringify({ error: "Scan impossible" }), { status: 500 });
+        return new Response(JSON.stringify({ score, checks }), { headers: { "Content-Type": "application/json" } });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Domaine inaccessible" }), { status: 400 });
       }
     }
 
-    // 2. PAGE PRINCIPALE
+    if (url.pathname === "/api/history") {
+      const history = db.query("SELECT * FROM scans ORDER BY timestamp DESC LIMIT 5").all();
+      return new Response(JSON.stringify(history), { headers: { "Content-Type": "application/json" } });
+    }
+
     return new Response(`
       <!DOCTYPE html>
-      <html>
-      <head>
-          <script src="https://cdn.tailwindcss.com"></script>
-          <title>Shield Conformité</title>
-      </head>
-      <body class="bg-slate-950 text-white min-h-screen p-8">
-          <div class="max-w-3xl mx-auto">
-              <h1 class="text-3xl font-bold mb-8 text-center text-indigo-400">Shield Conformité</h1>
-              
-              <div class="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-6">
-                  <div class="flex justify-between mb-4">
-                      <span>Score global</span>
-                      <span id="scoreText" class="text-2xl font-bold text-indigo-400">0%</span>
-                  </div>
-                  <div class="w-full bg-slate-800 rounded-full h-4">
-                      <div id="scoreBar" class="bg-indigo-600 h-4 rounded-full transition-all duration-1000" style="width: 0%"></div>
-                  </div>
-              </div>
-
-              <div class="flex gap-2 mb-8">
-                  <input id="url" class="flex-1 bg-slate-900 p-3 rounded-lg border border-slate-700" placeholder="ex: google.com">
-                  <button onclick="lancerScan()" id="btnScan" class="bg-indigo-600 px-6 py-3 rounded-lg">Scanner</button>
-              </div>
-
-              <div id="resultats" class="space-y-4"></div>
-          </div>
-
-          <script>
-              async function lancerScan() {
-                  const url = document.getElementById('url').value;
-                  const btn = document.getElementById('btnScan');
-                  btn.disabled = true;
-                  btn.innerText = "Analyse...";
-                  
-                  const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
-                  const data = await res.json();
-                  
-                  document.getElementById('scoreBar').style.width = data.score + "%";
-                  document.getElementById('scoreText').innerText = data.score + "%";
-                  
-                  document.getElementById('resultats').innerHTML = \`
-                    <div class="p-4 bg-slate-900 rounded-lg flex justify-between border border-slate-800">
-                        <span>HSTS (SSL)</span>
-                        <span class="\${data.hsts ? 'text-emerald-400' : 'text-red-400'} font-bold">\${data.hsts ? 'OUI' : 'NON'}</span>
-                    </div>
-                  \`;
-                  btn.disabled = false;
-                  btn.innerText = "Scanner";
-              }
-          </script>
-      </body>
-      </html>
+      <html class="bg-slate-950 text-white">
+      <head><script src="https://cdn.tailwindcss.com"></script></head>
+      <body class="p-8"><div class="max-w-3xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8 text-indigo-400">Shield Audit</h1>
+        <div class="flex gap-2 mb-8">
+            <input id="url" class="flex-1 bg-slate-900 p-3 rounded" placeholder="domaine.com">
+            <button onclick="scan()" class="bg-indigo-600 px-6 py-3 rounded">Scanner</button>
+        </div>
+        <div id="dashboard" class="space-y-4"></div>
+        <h2 class="mt-12 text-xl font-bold">Derniers scans</h2>
+        <div id="history" class="mt-4 space-y-2"></div>
+      </div>
+      <script>
+        async function scan() {
+            const url = document.getElementById('url').value;
+            const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url }) });
+            const data = await res.json();
+            const dash = document.getElementById('dashboard');
+            dash.innerHTML = '<div class="p-4 bg-slate-900 rounded">Score: '+data.score+'%</div>';
+            data.checks.forEach(c => {
+                dash.innerHTML += '<div class="p-4 bg-slate-800 rounded"><b>'+c.name+'</b>: '+(c.pass ? '✅' : '❌ <span class="text-xs text-red-400">'+c.tip+'</span>')+'</div>';
+            });
+            loadHistory();
+        }
+        async function loadHistory() {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            document.getElementById('history').innerHTML = data.map(h => '<div class="p-2 bg-slate-900 text-xs">'+h.domain+' - Score: '+h.score+'%</div>').join('');
+        }
+        loadHistory();
+      </script></body></html>
     `, { headers: { "Content-Type": "text/html" } });
-  },
+  }
 });
