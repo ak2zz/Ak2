@@ -1,4 +1,4 @@
-const PORT = parseInt(process.env.PORT || "3000");
+const PORT = parseInt(process.env.PORT || "8080");
 
 const server = Bun.serve({
   port: PORT,
@@ -35,23 +35,31 @@ const server = Bun.serve({
       <html>
       <head>
           <script src="https://cdn.tailwindcss.com"></script>
+          <title>Shield Conformité</title>
       </head>
       <body class="bg-slate-950 text-white flex items-center justify-center min-h-screen">
-          <div class="p-8 bg-slate-900 rounded-xl text-center">
-              <h1 class="text-2xl font-bold mb-4">Shield Conformité</h1>
-              <input id="url" class="text-black p-2 rounded" placeholder="google.fr">
-              <button onclick="scan()" class="bg-indigo-600 px-4 py-2 rounded">Scanner</button>
-              <div id="res" class="mt-4"></div>
+          <div class="p-8 bg-slate-900 rounded-xl text-center shadow-2xl border border-slate-800">
+              <h1 class="text-2xl font-bold mb-4 bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">Shield Conformité</h1>
+              <div class="flex gap-2">
+                  <input id="url" class="text-black p-2 rounded border border-slate-700 focus:outline-none" placeholder="google.fr">
+                  <button onclick="scan()" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded transition-all">Scanner</button>
+              </div>
+              <div id="res" class="mt-4 text-slate-300 font-mono"></div>
           </div>
           <script>
               async function scan() {
                   const url = document.getElementById('url').value;
-                  const res = await fetch('/api/scan', {
-                      method: 'POST',
-                      body: JSON.stringify({ url })
-                  });
-                  const data = await res.json();
-                  document.getElementById('res').innerText = "Score: " + (data.score || "Erreur");
+                  document.getElementById('res').innerText = "Analyse...";
+                  try {
+                      const res = await fetch('/api/scan', {
+                          method: 'POST',
+                          body: JSON.stringify({ url })
+                      });
+                      const data = await res.json();
+                      document.getElementById('res').innerText = data.error ? "Erreur" : "Score: " + data.score + "%";
+                  } catch(e) {
+                      document.getElementById('res').innerText = "Erreur de connexion";
+                  }
               }
           </script>
       </body>
