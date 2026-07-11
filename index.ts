@@ -1,84 +1,139 @@
-import { Database } from "bun:sqlite";
+const server = Bun.serve({
+  port: process.env.PORT || 3000,
+  async fetch(request) {
+    const url = new URL(request.url);
 
-const db = new Database("shield.db");
-db.run("CREATE TABLE IF NOT EXISTS scans (id INTEGER PRIMARY KEY AUTOINCREMENT, domain TEXT, score INTEGER, details TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)");
-
-const PORT = 3000;
-
-Bun.serve({
-  port: PORT,
-  hostname: "0.0.0.0",
-  async fetch(req) {
-    const url = new URL(req.url);
-
-    // API pour scanner
-    if (url.pathname === "/api/scan" && req.method === "POST") {
-      const { url: target } = await req.json();
+    // 🌐 1. API DU SCANNER INTELLIGENT
+    if (url.pathname === "/api/scan" && request.method === "POST") {
       try {
-        const domain = new URL(target.startsWith("http") ? target : `https://${target}`).hostname;
-        const res = await fetch(`https://${domain}`, { method: 'HEAD' });
-        const h = res.headers;
-        const checks = [
-          { name: "HSTS", pass: h.has('strict-transport-security') },
-          { name: "CSP", pass: h.has('content-security-policy') },
-          { name: "X-Frame", pass: h.has('x-frame-options') }
-        ];
-        const score = Math.round((checks.filter(c => c.pass).length / checks.length) * 100);
-        db.run("INSERT INTO scans (domain, score, details) VALUES (?, ?, ?)", [domain, score, JSON.stringify(checks)]);
-        return new Response(JSON.stringify({ score, checks }), { headers: { "Content-Type": "application/json" } });
-      } catch (e) { return new Response(JSON.stringify({ error: "Inaccessible" }), { status: 400 }); }
+        const body = await request.json();
+        let targetUrl = body.url.trim();
+
+        if (!targetUrl) {
+          return new Response(JSON.stringify({ error: "Veuillez entrer une adresse valide." }), { status: 400 });
+        }
+
+        if (!/^https?:\/\//i.test(targetUrl)) {
+          targetUrl = "https://" + targetUrl;
+        }
+
+        const isHttps = targetUrl.startsWith("https://");
+        let isOnline = false;
+        let secureHeaders = false;
+
+        try {
+          const response = await fetch(targetUrl, { 
+            method: "GET", 
+            headers: { "User-Agent": "ShieldConformiteScanner/1.0" },
+            signal: AbortSignal.timeout(4000) 
+          });
+          
+          isOnline = response.ok || response.status < 500;
+          secureHeaders = response.headers.has("strict-transport-security") || 
+                          response.headers.has("x-frame-options") || 
+                          response.headers.has("content-security-policy");
+        } catch (e) {
+          try {
+            const fallbackUrl = targetUrl.replace("https://", "http://");
+            const response = await fetch(fallbackUrl, { method: "HEAD", signal: AbortSignal.timeout(3000) });
+            isOnline = response.ok || response.status < 500;
+          } catch(err) { isOnline = false; }
+        }
+
+        let score = 20;
+        if (isOnline) score += 20;
+        if (isHttps) score += 30;
+        if (secureHeaders) score += 30;
+
+        return new Response(JSON.stringify({
+          success: true,
+          score: score,
+          isOnline: isOnline,
+          isHttps: isHttps,
+          secureHeaders: secureHeaders,
+          domain: new URL(targetUrl).hostname
+        }), { headers: { "Content-Type": "application/json" } });
+
+      } catch (err) {
+        return new Response(JSON.stringify({ error: "Impossible d'analyser ce site." }), { status: 500 });
+      }
     }
 
-    if (url.pathname === "/api/history") {
-      return new Response(JSON.stringify(db.query("SELECT * FROM scans ORDER BY timestamp DESC LIMIT 5").all()), { headers: { "Content-Type": "application/json" } });
-    }
-
-    // PAGE PRINCIPALE
-    return new Response(`
+    // 📄 2. LANDING PAGE PREMIUM
+    if (url.pathname === "/") {
+      return new Response(`
       <!DOCTYPE html>
-      <html class="bg-black text-white">
+      <html lang="fr" class="scroll-smooth">
       <head>
           <meta charset="UTF-8">
-          <script src="https://cdn.tailwindcss.com"></script>
+          <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+          <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
           <style>
-            .grid-bg { background-image: linear-gradient(to right, #222 1px, transparent 1px), linear-gradient(to bottom, #222 1px, transparent 1px); background-size: 40px 40px; }
-            .fade-in { animation: fadeIn 0.8s ease-out forwards; }
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+              .grid-bg { background-image: linear-gradient(to right, #1e293b 1px, transparent 1px), linear-gradient(to bottom, #1e293b 1px, transparent 1px); background-size: 4rem 4rem; }
+              .btn-click { transition: transform 0.1s; }
+              .btn-click:active { transform: scale(0.95); }
           </style>
       </head>
-      <body class="grid-bg min-h-screen">
-        
-        <div id="view-home" class="h-screen flex flex-col justify-center items-center p-8 fade-in">
-            <h1 class="text-7xl font-black tracking-tighter mb-6">SHIELD AUDIT</h1>
-            <p class="text-gray-500 mb-12">Sécurité web. Transparence totale.</p>
-            <button onclick="nav('view-scan')" class="border border-white px-8 py-3 hover:bg-white hover:text-black transition-all">Démarrer l'audit</button>
-        </div>
+      <body class="bg-slate-950 text-slate-100 font-sans min-h-screen grid-bg">
 
-        <div id="view-scan" class="hidden min-h-screen p-12 fade-in">
-            <h2 class="text-3xl font-bold mb-12">Scanner un domaine</h2>
-            <div class="flex gap-4 mb-12 max-w-xl">
-                <input id="url" class="flex-1 bg-transparent border-b border-gray-700 p-2 focus:outline-none" placeholder="ex: google.com">
-                <button onclick="scan()" class="border border-white px-6 py-2">Scanner</button>
-            </div>
-            <div id="results" class="space-y-4 max-w-xl"></div>
-        </div>
+          <nav class="sticky top-0 z-50 backdrop-blur-md bg-slate-950/70 border-b border-slate-900 px-6 py-4">
+              <div class="max-w-6xl mx-auto flex justify-between items-center">
+                  <span class="text-xl font-black bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">🛡️ Shield Conformité</span>
+              </div>
+          </nav>
 
-        <script>
-          function nav(id) {
-            document.getElementById('view-home').classList.add('hidden');
-            document.getElementById('view-scan').classList.remove('hidden');
-          }
-          async function scan() {
-            const res = await fetch('/api/scan', { method: 'POST', body: JSON.stringify({ url: document.getElementById('url').value }) });
-            const data = await res.json();
-            const resDiv = document.getElementById('results');
-            resDiv.innerHTML = '<div class="text-5xl font-black mb-8">' + data.score + '%</div>';
-            data.checks.forEach(c => {
-                resDiv.innerHTML += '<div class="flex justify-between border-b border-gray-800 pb-2"><span>'+c.name+'</span><span>'+(c.pass ? 'ACTIF' : 'INACTIF')+'</span></div>';
-            });
-          }
-        </script>
-      </body></html>
-    `, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  }
+          <section id="hero" class="max-w-4xl mx-auto pt-20 pb-16 px-6 text-center space-y-8">
+              <h2 data-aos="fade-up" class="text-5xl md:text-6xl font-black tracking-tight">Protégez vos actifs <br><span class="text-indigo-400">numériques</span></h2>
+              
+              <div data-aos="zoom-in" class="bg-slate-900/60 border border-slate-800 rounded-2xl p-8 backdrop-blur-xl shadow-2xl space-y-6">
+                  <div class="flex justify-between items-center">
+                      <h3 class="font-bold">Score de Conformité</h3>
+                      <span id="score-text" class="text-4xl font-black text-indigo-400">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-950 rounded-full h-3 border border-slate-800">
+                      <div id="score-bar" class="bg-indigo-500 h-3 rounded-full transition-all duration-700" style="width: 0%"></div>
+                  </div>
+                  <div class="flex gap-3">
+                      <input type="text" id="url-input" placeholder="domaine.com" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 flex-1 focus:outline-none focus:border-indigo-500">
+                      <button id="scan-button" onclick="executeAdvancedScan()" class="btn-click bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-xl font-bold transition-all">Analyser</button>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-slate-800 pt-6">
+                      <div class="p-3 bg-slate-950/40 rounded-xl"><p class="text-[10px] text-slate-400 uppercase">Serveur</p><p id="status-label" class="font-bold text-slate-300">---</p></div>
+                      <div class="p-3 bg-slate-950/40 rounded-xl"><p class="text-[10px] text-slate-400 uppercase">SSL</p><p id="ssl-label" class="font-bold text-slate-300">---</p></div>
+                      <div class="p-3 bg-slate-950/40 rounded-xl"><p class="text-[10px] text-slate-400 uppercase">Headers</p><p id="headers-label" class="font-bold text-slate-300">---</p></div>
+                  </div>
+              </div>
+          </section>
+
+          <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+          <script>
+              AOS.init({ once: false });
+              async function executeAdvancedScan() {
+                  const input = document.getElementById('url-input');
+                  const btn = document.getElementById('scan-button');
+                  btn.innerText = "Analyse...";
+                  
+                  const res = await fetch('/api/scan', { 
+                    method: 'POST', 
+                    body: JSON.stringify({ url: input.value }) 
+                  });
+                  const data = await res.json();
+                  
+                  document.getElementById('score-text').innerText = data.score + "%";
+                  document.getElementById('score-bar').style.width = data.score + "%";
+                  document.getElementById('status-label').innerText = data.isOnline ? "EN LIGNE" : "ÉCHEC";
+                  document.getElementById('ssl-label').innerText = data.isHttps ? "HTTPS" : "HTTP";
+                  document.getElementById('headers-label').innerText = data.secureHeaders ? "OK" : "MANQUANT";
+                  btn.innerText = "Analyser";
+              }
+          </script>
+      </body>
+      </html>
+      `, { headers: { "Content-Type": "text/html; charset=utf-8" } });
+    }
+
+    return new Response("Not Found", { status: 404 });
+  },
 });
+
+console.log("🚀 Serveur en ligne");
