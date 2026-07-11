@@ -1,5 +1,5 @@
-
-const PORT = parseInt(process.env.PORT || "8080");
+// On force le port 3000 car c'est celui que Railway utilise pour diriger le trafic vers ton service
+const PORT = 3000;
 
 const server = Bun.serve({
   port: PORT,
